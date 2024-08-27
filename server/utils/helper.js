@@ -19,3 +19,10 @@ export const byteToMb = (bytes) => {
 export const generateRandomNumber = () => {
     return uuidv4();
 }
+
+export const removeImage = (imageName) => {
+    const path = process.cwd() + "/public/images/" + imageName;
+    if (fs.existsSync(path)) {
+        fs.unlinkSync(path)
+    }
+}
