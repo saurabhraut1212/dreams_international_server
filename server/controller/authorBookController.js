@@ -4,7 +4,7 @@ import path from "path";
 
 export const addAuthorBook = async (req, res) => {
     try {
-        const { title, description, author, publishDate, price, tags } = req.body;
+        const { title, description, author, publishDate, price, tags, status } = req.body;
 
 
         if (!req.files || !req.files.cover) {
@@ -41,7 +41,8 @@ export const addAuthorBook = async (req, res) => {
                 author,
                 publishDate,
                 price,
-                tags
+                tags,
+                status: status || 'draft'
             });
 
             await newBook.save();
@@ -56,7 +57,7 @@ export const addAuthorBook = async (req, res) => {
 
 export const updateAuthorBook = async (req, res) => {
     try {
-        const { title, description, author, publishDate, price, tags } = req.body;
+        const { title, description, author, publishDate, price, tags, status } = req.body;
         const { id } = req.params;
         const user = req.user;
 
@@ -99,6 +100,7 @@ export const updateAuthorBook = async (req, res) => {
         book.publishDate = publishDate || book.publishDate;
         book.price = price || book.price;
         book.tags = tags || book.tags;
+        book.status = status || book.status;
 
         await book.save();
         return res.status(200).json({ message: "Book updated successfully", book });
@@ -109,3 +111,51 @@ export const updateAuthorBook = async (req, res) => {
         return res.status(500).json({ message: "Internal server error" });
     }
 };
+
+
+export const getBooksByAuthor = async (req, res) => {
+    try {
+        const { authorId } = req.params;
+        const { page = 1, limit = 10 } = req.query;
+
+        const pageNumber = parseInt(page, 10);
+        const pageSize = parseInt(limit, 10);
+
+        if (pageNumber < 1 || pageSize < 1) {
+            return res.status(400).json({ message: "Invalid pagination parameters" });
+        }
+
+        const skip = (pageNumber - 1) * pageSize;
+
+
+        const books = await AuthorBook.find({ author: authorId }).skip(skip).limit(pageSize);
+        const totalBooks = await AuthorBook.countDocuments({ author: authorId });
+
+        return res.status(200).json({
+            books,
+            pagination: {
+                currentPage: pageNumber,
+                pageSize,
+                totalBooks,
+                totalPages: Math.ceil(totalBooks / pageSize)
+            }
+        });
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
+
+export const getAllBooks = async (req, res) => {
+    try {
+        const books = await AuthorBook.find({});
+        if (!books) {
+            return res.status(400).json({ message: "Books not found" })
+        }
+        return res.status(200).json(books);
+
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
