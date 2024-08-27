@@ -59,9 +59,9 @@ export const readerLogin = async (req, res) => {
 export const addReview = async (req, res) => {
     try {
         const { rating, message, bookId } = req.body;
-        const { id: readerId } = req.user;
+        const { id: readerId } = req.reader;
 
-        const book = await AuthorBook.findOne(bookId);
+        const book = await AuthorBook.findById(bookId);
         if (!book) {
             return res.status(404).json({ message: "Book not found" });
         }
@@ -80,7 +80,7 @@ export const addReview = async (req, res) => {
         await newReview.save();
 
         //add review to the readers document
-        await Reader.findByIdAndUpdate(readerId, { $push: { reviews: newReview } });
+        await Reader.findByIdAndUpdate(readerId, { $push: { reviews: newReview._id } });
 
         return res.status(201).json({ message: "New review added successfully", review: newReview })
     } catch (error) {
@@ -88,3 +88,127 @@ export const addReview = async (req, res) => {
         return res.status(500).json({ message: "Internal server error" });
     }
 }
+
+export const getTopRatedBooks = async (req, res) => {
+    try {
+        const books = await AuthorBook.find({ status: "published" }).sort({ rating: -1 }).limit(10);
+        if (!books) {
+            return res.status(400).json({ message: "No top rated books" })
+        }
+        return res.status(200).json(books);
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Internal server error" })
+    }
+}
+
+export const getBooksByAuthor = async (req, res) => {
+    const { authorId } = req.params;
+    try {
+        const books = await AuthorBook.find({ author: authorId, status: "published" });
+        if (!books) {
+            return res.status(400).json({ message: "No books with that author id" })
+        }
+        return res.status(200).json(books);
+
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Internal server error" })
+    }
+}
+
+export const searchBooksByTitle = async (req, res) => {
+    const { title } = req.query;
+    try {
+        const books = await AuthorBook.find({ title: { $regex: title, $options: 'i' }, status: 'published' });
+        if (!books) {
+            return res.status(400).json({ message: "No books with that title" })
+        }
+        return res.status(200).json(books);
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Internal server error" })
+    }
+}
+
+export const filterBooks = async (req, res) => {
+    const { minPrice, maxPrice, tags, minRating } = req.query;
+
+    let query = { status: 'published' };
+
+    if (minPrice || maxPrice) {
+        query.price = { $gte: minPrice || 0, $lte: maxPrice || infinity }
+    }
+
+    if (tags) {
+        query.tags = { $in: tags.split(",") };
+    }
+
+    if (minRating) {
+        query.rating = { $gte: minRating };
+    }
+
+    try {
+        const books = await AuthorBook.find(query);
+        if (!books) {
+            return res.status(400).json({ message: "No books with that provided criteria" })
+        }
+        return res.status(200).json(books);
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Internal server error" })
+    }
+}
+
+export const sortBooks = async (req, res) => {
+    const { sortBy } = req.query;
+
+    let sortCriteria;
+    switch (sortBy) {
+        case "price-asc":
+            sortCriteria = { price: 1 };
+            break;
+        case "price-desc":
+            sortCriteria = { price: -1 };
+            break;
+        case "publish-date-asc":
+            sortCriteria = { publishDate: 1 };
+            break;
+        case "publish-date-desc":
+            sortCriteria = { publishDate: -1 };
+            break;
+        case "rating-asc":
+            sortCriteria = { rating: 1 };
+            break;
+        case "rating-desc":
+            sortCriteria = { rating: -1 };
+            break;
+        default:
+            sortCriteria = {};
+    }
+
+    try {
+        const books = await AuthorBook.find({ status: "published" }).sort(sortCriteria);
+        return res.status(200).json(books);
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+};
+
+export const getBookDetails = async (req, res) => {
+    const { id } = req.params;
+
+    try {
+        const book = await AuthorBook.findById(id).populate("author", "name");
+        if (!book || !book.published) {
+            return res.status(404).json({ message: "Book not found" });
+        }
+
+        return res.status(200).json(book);
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+};
+

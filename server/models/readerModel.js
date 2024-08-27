@@ -3,7 +3,7 @@ import mongoose, { Schema } from "mongoose";
 
 const reviewSchema = new Schema({
     book: { type: Schema.Types.ObjectId, ref: "AuthorBook", required: true },
-    reader: { type: Schema.TYpes.ObjectId, ref: "Reader", required: true },
+    reader: { type: Schema.Types.ObjectId, ref: "Reader", required: true },
     rating: { type: Number, min: 1, max: 5, required: true },
     message: { type: String, required: true },
     reviewDate: { type: Date, default: Date.now }

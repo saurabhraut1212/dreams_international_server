@@ -6,7 +6,8 @@ import "dotenv/config";
 import dbConnect from "./db/dbconfig.js";
 
 import AuthorRoutes from "./routes/authorRoutes.js";
-import AuthorBookRoutes from "./routes/authorBookRoutes.js"
+import AuthorBookRoutes from "./routes/authorBookRoutes.js";
+import ReaderRoutes from "./routes/readerRoutes.js"
 
 const app = express();
 
@@ -29,6 +30,7 @@ const PORT = process.env.PORT || 8000;
 //api routes
 app.use('/api/auth', AuthorRoutes);
 app.use('/api/book', AuthorBookRoutes);
+app.use("/api/reader", ReaderRoutes)
 
 app.listen(PORT, () => {
     console.log(`Server started on port ${PORT}`)
