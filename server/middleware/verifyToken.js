@@ -9,7 +9,9 @@ const verifyToken = (req, res, next) => {
 
     const token = headerToken.split(" ")[1];
     jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-        if (err) throw err;
+        if (err) {
+            return res.status(403).json({ message: "Token verification failed" });
+        };
         req.user = user;
         next();
     })
