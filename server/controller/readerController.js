@@ -61,33 +61,39 @@ export const addReview = async (req, res) => {
         const { rating, message, bookId } = req.body;
         const { id: readerId } = req.reader;
 
+        if (rating < 1 || rating > 5) {
+            return res.status(400).json({ message: "Rating must be between 1 and 5" });
+        }
+
         const book = await AuthorBook.findById(bookId);
         if (!book) {
             return res.status(404).json({ message: "Book not found" });
         }
 
-        if (rating < 1 || rating > 5) {
-            return res.status(400).json({ message: "Rating must be between 1 and 5" })
-        }
-
-        const newReview = new Review({
-            book: bookId,
-            reader: readerId,
-            rating,
-            message
+        const result = await book.updateOne({
+            $push: {
+                reviews: {
+                    reader: readerId,
+                    rating,
+                    message,
+                    reviewDate: new Date()
+                }
+            }
         });
 
-        await newReview.save();
 
-        //add review to the readers document
-        await Reader.findByIdAndUpdate(readerId, { $push: { reviews: newReview._id } });
+        if (!result) {
+            return res.status(500).json({ message: "Failed to add the review" });
+        }
 
-        return res.status(201).json({ message: "New review added successfully", review: newReview })
+        return res.status(201).json({ message: "Review added successfully" });
     } catch (error) {
         console.log(error);
         return res.status(500).json({ message: "Internal server error" });
     }
-}
+};
+
+
 
 export const getTopRatedBooks = async (req, res) => {
     try {

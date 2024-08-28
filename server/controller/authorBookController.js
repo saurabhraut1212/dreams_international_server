@@ -134,12 +134,10 @@ export const updateAuthorBook = async (req, res) => {
         return res.status(500).json({ message: "Internal server error" });
     }
 };
-
-
 export const getBooksByAuthor = async (req, res) => {
     try {
         const { authorId } = req.params;
-        const { page = 1, limit = 10 } = req.query;
+        const { page = 1, limit = 10, search = '', status = '', sortByDate = '', sortByRatings = '' } = req.query;
 
         const pageNumber = parseInt(page, 10);
         const pageSize = parseInt(limit, 10);
@@ -149,23 +147,60 @@ export const getBooksByAuthor = async (req, res) => {
         }
 
         const skip = (pageNumber - 1) * pageSize;
+        const filter = { author: authorId };
 
+        if (search) {
+            filter.title = { $regex: search.trim(), $options: 'i' };
+        }
 
-        const books = await AuthorBook.find({ author: authorId }).skip(skip).limit(pageSize);
-        const totalBooks = await AuthorBook.countDocuments({ author: authorId });
+        if (status) {
+            filter.status = status;
+        }
 
+        const sortOptions = {};
+        if (sortByDate === 'asc') {
+            sortOptions.publishDate = 1;
+        } else if (sortByDate === 'desc') {
+            sortOptions.publishDate = -1;
+        }
 
-        const baseURL = `${req.protocol}://${req.get('host')}`;
+        const books = await AuthorBook.find(filter)
+            .populate({
+                path: 'reviews',
+                populate: {
+                    path: 'reader',
+                    select: 'name email'
+                }
+            })
+            .sort(sortOptions)
+            .skip(skip)
+            .limit(pageSize);
 
-        const booksWithImageURL = books.map((book) => {
+        const booksWithAverageRating = books.map(book => {
+            const totalReviews = book.reviews.length;
+            const averageRating = totalReviews > 0
+                ? book.reviews.reduce((sum, review) => sum + review.rating, 0) / totalReviews
+                : 0;
+
             return {
                 ...book._doc,
-                coverImageUrl: `${baseURL}/public/images/${book.cover}`
+                averageRating: averageRating,
+                coverImageUrl: `${req.protocol}://${req.get('host')}/public/images/${book.cover}`
             };
         });
 
+
+        if (sortByRatings === 'asc') {
+            booksWithAverageRating.sort((a, b) => a.averageRating - b.averageRating);
+        } else if (sortByRatings === 'desc') {
+            booksWithAverageRating.sort((a, b) => b.averageRating - a.averageRating);
+        }
+
+
+        const totalBooks = await AuthorBook.countDocuments(filter);
+
         return res.status(200).json({
-            books: booksWithImageURL,
+            books: booksWithAverageRating,
             pagination: {
                 currentPage: pageNumber,
                 pageSize,
@@ -178,6 +213,7 @@ export const getBooksByAuthor = async (req, res) => {
         return res.status(500).json({ message: "Internal server error" });
     }
 };
+
 
 export const getAllBooks = async (req, res) => {
     try {
