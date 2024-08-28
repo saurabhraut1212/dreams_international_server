@@ -51,3 +51,13 @@ export const authorLogin = async (req, res) => {
         return res.status(500).json({ message: "Internal server error" })
     }
 }
+
+export const getAllAuthors = async (req, res) => {
+    try {
+        const authors = await Author.find({});
+        return res.status(200).json(authors);
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "Internal server error" })
+    }
+}

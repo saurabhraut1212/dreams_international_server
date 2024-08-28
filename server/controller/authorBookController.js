@@ -1,11 +1,12 @@
 import AuthorBook from "../models/authorBookModel.js";
 import { imageValidator, generateRandomNumber, removeImage } from "../utils/helper.js";
 import path from "path";
+import fs from "fs";
 
 export const addAuthorBook = async (req, res) => {
     try {
-        const { title, description, author, publishDate, price, tags, status } = req.body;
-
+        const { title, description, publishDate, price, tags, status } = req.body;
+        const authorId = req.user.id;
 
         if (!req.files || !req.files.cover) {
             return res.status(400).json({ message: "Cover image is required" });
@@ -38,7 +39,7 @@ export const addAuthorBook = async (req, res) => {
                 cover: imageName,
                 title,
                 description,
-                author,
+                author: authorId,
                 publishDate,
                 price,
                 tags,
@@ -55,14 +56,26 @@ export const addAuthorBook = async (req, res) => {
     }
 };
 
+export const getBookById = async (req, res) => {
+    try {
+        const { bookId } = req.params;
+        const book = await AuthorBook.findById(bookId);
+        if (!book) {
+            return res.status(400).json({ message: "Book with that id does not exists" });
+        }
+        return res.status(200).json({ book });
+    } catch (error) {
+        console.error("Internal server error:", error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+}
 export const updateAuthorBook = async (req, res) => {
     try {
-        const { title, description, author, publishDate, price, tags, status } = req.body;
-        const { id } = req.params;
+        const { title, description, publishDate, price, tags, status } = req.body;
+        const { bookId } = req.params;
         const user = req.user;
 
-
-        const book = await AuthorBook.findById(id);
+        const book = await AuthorBook.findById(bookId);
 
         if (!book) {
             return res.status(400).json({ message: "Book with that id does not exist" });
@@ -72,6 +85,9 @@ export const updateAuthorBook = async (req, res) => {
             return res.status(403).json({ message: "Unauthorized user" });
         }
 
+        let imageName = book.cover; // Default to the current cover
+
+
         const cover = req?.files?.cover;
         if (cover) {
             const validationMessage = imageValidator(cover.size, cover.mimetype);
@@ -80,32 +96,39 @@ export const updateAuthorBook = async (req, res) => {
             }
 
             const imgExt = cover.name.split(".").pop();
-            const imageName = generateRandomNumber() + "." + imgExt;
+            imageName = generateRandomNumber() + "." + imgExt;
             const uploadPath = path.join(process.cwd(), "/public/images/", imageName);
 
-            cover.mv(uploadPath, async (err) => {
-                if (err) {
-                    console.error("File upload error:", err);
-                    return res.status(500).json({ message: "Cover image upload failed" });
-                }
+            await cover.mv(uploadPath);
 
 
-            });
-            removeImage(book.cover);
+            if (book.cover) {
+                removeImage(book.cover);
+            }
         }
+
 
         book.title = title || book.title;
         book.description = description || book.description;
-        book.author = author || book.author;
         book.publishDate = publishDate || book.publishDate;
         book.price = price || book.price;
         book.tags = tags || book.tags;
         book.status = status || book.status;
+        book.cover = imageName;
 
         await book.save();
-        return res.status(200).json({ message: "Book updated successfully", book });
 
 
+        const baseURL = `${req.protocol}://${req.get('host')}`;
+        const coverImageUrl = `${baseURL}/public/images/${book.cover}`;
+
+        return res.status(200).json({
+            message: "Book updated successfully",
+            book: {
+                ...book._doc,
+                coverImageUrl
+            }
+        });
     } catch (error) {
         console.error(error);
         return res.status(500).json({ message: "Internal server error" });
@@ -131,8 +154,18 @@ export const getBooksByAuthor = async (req, res) => {
         const books = await AuthorBook.find({ author: authorId }).skip(skip).limit(pageSize);
         const totalBooks = await AuthorBook.countDocuments({ author: authorId });
 
+
+        const baseURL = `${req.protocol}://${req.get('host')}`;
+
+        const booksWithImageURL = books.map((book) => {
+            return {
+                ...book._doc,
+                coverImageUrl: `${baseURL}/public/images/${book.cover}`
+            };
+        });
+
         return res.status(200).json({
-            books,
+            books: booksWithImageURL,
             pagination: {
                 currentPage: pageNumber,
                 pageSize,
@@ -144,7 +177,7 @@ export const getBooksByAuthor = async (req, res) => {
         console.log(error);
         return res.status(500).json({ message: "Internal server error" });
     }
-}
+};
 
 export const getAllBooks = async (req, res) => {
     try {
@@ -159,3 +192,39 @@ export const getAllBooks = async (req, res) => {
         return res.status(500).json({ message: "Internal server error" });
     }
 }
+
+export const deleteAuthorBook = async (req, res) => {
+    try {
+        const { bookId } = req.params;
+        const authorId = req.user.id;
+
+        const book = await AuthorBook.findById(bookId);
+        if (!book) {
+            return res.status(400).json({ message: "Book not found" });
+        }
+
+        if (authorId !== book.author.toString()) {
+            return res.status(400).json({ message: "Unauthorized user" });
+        }
+
+        const coverImagePath = path.join(process.cwd(), '/public/images/', book.cover);
+
+        await AuthorBook.findByIdAndDelete(bookId);
+
+        if (fs.existsSync(coverImagePath)) {
+            fs.unlink(coverImagePath, (err) => {
+                if (err) {
+                    console.error("Error deleting cover image:", err);
+                    return res.status(500).json({ message: "Error deleting cover image" });
+                }
+                console.log("Cover image deleted successfully");
+            });
+        }
+
+        return res.status(200).json({ message: "Book deleted successfully" });
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: "Internal server error" });
+    }
+};
