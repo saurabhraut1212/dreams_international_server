@@ -97,16 +97,87 @@ export const addReview = async (req, res) => {
 
 export const getTopRatedBooks = async (req, res) => {
     try {
-        const books = await AuthorBook.find({ status: "published" }).sort({ rating: -1 }).limit(10);
-        if (!books) {
-            return res.status(400).json({ message: "No top rated books" })
+        const { page = 1, limit = 10, search = '', status, sortByDate = '', sortByRating = '' } = req.query;
+
+        const pageNumber = parseInt(page, 10);
+        const pageSize = parseInt(limit, 10);
+
+        if (pageNumber < 1 || pageSize < 1) {
+            return res.status(400).json({ message: "Invalid pagination parameters" });
         }
-        return res.status(200).json(books);
+
+        const skip = (pageNumber - 1) * pageSize;
+
+        const filter = { status: 'published' };
+
+        if (search) {
+            filter.title = { $regex: search, $options: 'i' };
+        }
+
+        if (status) {
+            filter.status = status;
+        }
+
+        const sortOptions = {};
+        if (sortByRating === 'asc') {
+            sortOptions.averageRating = 1;
+        } else if (sortByRating === 'desc') {
+            sortOptions.averageRating = -1;
+        } else {
+            sortOptions.averageRating = -1;
+        }
+
+        if (sortByDate === 'asc') {
+            sortOptions.publishDate = 1;
+        } else if (sortByDate === 'desc') {
+            sortOptions.publishDate = -1;
+        }
+
+        const books = await AuthorBook.find(filter)
+            .populate({
+                path: 'reviews',
+                populate: {
+                    path: 'reader',
+                    select: 'name email'
+                }
+            })
+            .sort(sortOptions)
+            .skip(skip)
+            .limit(pageSize);
+
+        console.log(books, "fetched books");
+
+        const booksWithAverageRating = books.map(book => {
+            const totalReviews = book.reviews.length;
+            const averageRating = totalReviews > 0
+                ? (book.reviews.reduce((sum, review) => sum + review.rating, 0) / totalReviews).toFixed(1)
+                : '0.0';
+
+            return {
+                ...book._doc,
+                averageRating: averageRating,
+                coverImageUrl: `${req.protocol}://${req.get('host')}/public/images/${book.cover}`
+            };
+        });
+
+        const totalBooks = await AuthorBook.countDocuments(filter);
+
+        return res.status(200).json({
+            books: booksWithAverageRating,
+            pagination: {
+                currentPage: pageNumber,
+                pageSize,
+                totalBooks,
+                totalPages: Math.ceil(totalBooks / pageSize)
+            }
+        });
     } catch (error) {
-        console.log(error);
-        return res.status(500).json({ message: "Internal server error" })
+        console.error(error);
+        return res.status(500).json({ message: "Internal server error" });
     }
-}
+};
+
+
 
 export const getBooksByAuthor = async (req, res) => {
     const { authorId } = req.params;
@@ -123,98 +194,4 @@ export const getBooksByAuthor = async (req, res) => {
     }
 }
 
-export const searchBooksByTitle = async (req, res) => {
-    const { title } = req.query;
-    try {
-        const books = await AuthorBook.find({ title: { $regex: title, $options: 'i' }, status: 'published' });
-        if (!books) {
-            return res.status(400).json({ message: "No books with that title" })
-        }
-        return res.status(200).json(books);
-    } catch (error) {
-        console.log(error);
-        return res.status(500).json({ message: "Internal server error" })
-    }
-}
-
-export const filterBooks = async (req, res) => {
-    const { minPrice, maxPrice, tags, minRating } = req.query;
-
-    let query = { status: 'published' };
-
-    if (minPrice || maxPrice) {
-        query.price = { $gte: minPrice || 0, $lte: maxPrice || infinity }
-    }
-
-    if (tags) {
-        query.tags = { $in: tags.split(",") };
-    }
-
-    if (minRating) {
-        query.rating = { $gte: minRating };
-    }
-
-    try {
-        const books = await AuthorBook.find(query);
-        if (!books) {
-            return res.status(400).json({ message: "No books with that provided criteria" })
-        }
-        return res.status(200).json(books);
-    } catch (error) {
-        console.log(error);
-        return res.status(500).json({ message: "Internal server error" })
-    }
-}
-
-export const sortBooks = async (req, res) => {
-    const { sortBy } = req.query;
-
-    let sortCriteria;
-    switch (sortBy) {
-        case "price-asc":
-            sortCriteria = { price: 1 };
-            break;
-        case "price-desc":
-            sortCriteria = { price: -1 };
-            break;
-        case "publish-date-asc":
-            sortCriteria = { publishDate: 1 };
-            break;
-        case "publish-date-desc":
-            sortCriteria = { publishDate: -1 };
-            break;
-        case "rating-asc":
-            sortCriteria = { rating: 1 };
-            break;
-        case "rating-desc":
-            sortCriteria = { rating: -1 };
-            break;
-        default:
-            sortCriteria = {};
-    }
-
-    try {
-        const books = await AuthorBook.find({ status: "published" }).sort(sortCriteria);
-        return res.status(200).json(books);
-    } catch (error) {
-        console.log(error);
-        return res.status(500).json({ message: "Internal server error" });
-    }
-};
-
-export const getBookDetails = async (req, res) => {
-    const { id } = req.params;
-
-    try {
-        const book = await AuthorBook.findById(id).populate("author", "name");
-        if (!book || !book.published) {
-            return res.status(404).json({ message: "Book not found" });
-        }
-
-        return res.status(200).json(book);
-    } catch (error) {
-        console.log(error);
-        return res.status(500).json({ message: "Internal server error" });
-    }
-};
 

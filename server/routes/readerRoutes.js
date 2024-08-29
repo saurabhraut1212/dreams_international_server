@@ -9,11 +9,8 @@ router.post("/readerLogin", readerLogin);
 router.post("/addReview", verifyReader, addReview);
 
 //books 
-router.get("/top-rated-books", getTopRatedBooks);
+router.get("/topRatedBooks", getTopRatedBooks);
 router.get("/books/author/:authorId", getBooksByAuthor);
-router.get("/books/search", searchBooksByTitle);
-router.get("/books/filter", filterBooks);
-router.get("/books/sort", sortBooks);
-router.get("/books/:id", getBookDetails);
+
 
 export default router;

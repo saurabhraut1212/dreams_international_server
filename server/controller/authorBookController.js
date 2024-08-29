@@ -179,8 +179,8 @@ export const getBooksByAuthor = async (req, res) => {
         const booksWithAverageRating = books.map(book => {
             const totalReviews = book.reviews.length;
             const averageRating = totalReviews > 0
-                ? book.reviews.reduce((sum, review) => sum + review.rating, 0) / totalReviews
-                : 0;
+                ? (book.reviews.reduce((sum, review) => sum + review.rating, 0) / totalReviews).toFixed(1)
+                : '0.0';
 
             return {
                 ...book._doc,
