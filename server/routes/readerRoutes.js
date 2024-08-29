@@ -1,5 +1,5 @@
 import express from "express";
-import { addReview, filterBooks, getBookDetails, getBooksByAuthor, getTopRatedBooks, readerLogin, readerRegister, searchBooksByTitle, sortBooks } from "../controller/readerController.js";
+import { addReview, getBooksByAuthor, getTopRatedBooks, readerLogin, readerRegister } from "../controller/readerController.js";
 import verifyReader from "../middleware/verifyReader.js";
 
 const router = express.Router();
